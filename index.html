@@ -1,0 +1,580 @@
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>【VRゲーム】お菓子の家を目指せ！ | バレンタイン2026🍫</title>
+    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
+
+    <script src="https://aframe.io/releases/1.7.1/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.5.4/dist/aframe-extras.min.js"></script>
+
+    <style>
+      #timer-ui {
+        position: fixed; /* 画面に固定 */
+        top: 10px;
+        left: 20px;
+        z-index: 9999; /* 最前面に表示 */
+        font-family: "Arial", sans-serif;
+        font-weight: bold;
+        font-size: 40px;
+        color: #0000ff; /* 赤文字 */
+        pointer-events: none; /* VR操作の邪魔をしない */
+        user-select: none;
+      }
+    </style>
+
+    <script>
+      // ----------------------------------------------------------
+      // 新機能: タイマー管理 (計測と表示)
+      // ----------------------------------------------------------
+      AFRAME.registerComponent("game-timer", {
+        init: function () {
+          this.display = document.getElementById("timer-text");
+          this.isRunning = false;
+          this.isFinished = false;
+          this.startTime = 0;
+          this.endTime = 0;
+
+          // スタート信号を受け取る
+          this.el.sceneEl.addEventListener("timer-start", () => {
+            if (!this.isRunning && !this.isFinished) {
+              this.isRunning = true;
+              this.startTime = Date.now();
+            }
+          });
+
+          // ストップ信号を受け取る
+          this.el.sceneEl.addEventListener("timer-stop", () => {
+            if (this.isRunning) {
+              this.isRunning = false;
+              this.isFinished = true;
+              this.endTime = Date.now();
+              this.updateText(this.endTime); // 最終タイムで確定
+            }
+          });
+        },
+
+        tick: function () {
+          if (this.isRunning) {
+            this.updateText(Date.now());
+          }
+        },
+
+        updateText: function (currentTime) {
+          const diff = currentTime - this.startTime;
+          // ミリ秒を "00.00" 形式に変換
+          const sec = Math.floor(diff / 1000);
+          const ms = Math.floor((diff % 1000) / 10); // 2桁
+          this.display.innerText = `TIME: ${sec}.${ms.toString().padStart(2, "0")}`;
+        },
+      });
+
+      // ----------------------------------------------------------
+      // 0. サウンドマネージャー (変更なし)
+      // ----------------------------------------------------------
+      AFRAME.registerComponent("sound-manager", {
+        init: function () {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+          this.el.sceneEl.addEventListener("sound-throw", () =>
+            this.playThrow(),
+          );
+          this.el.sceneEl.addEventListener("sound-hit", () => this.playHit());
+          this.el.sceneEl.addEventListener("sound-explode", () =>
+            this.playExplode(),
+          );
+        },
+        playThrow: function () {
+          if (this.ctx.state === "suspended") this.ctx.resume();
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(
+            100,
+            this.ctx.currentTime + 0.15,
+          );
+          gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(
+            0.01,
+            this.ctx.currentTime + 0.15,
+          );
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.15);
+        },
+        playHit: function () {
+          if (this.ctx.state === "suspended") this.ctx.resume();
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.type = "square";
+          osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(
+            0.01,
+            this.ctx.currentTime + 0.1,
+          );
+          gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(
+            0.01,
+            this.ctx.currentTime + 0.1,
+          );
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.1);
+        },
+        playExplode: function () {
+          if (this.ctx.state === "suspended") this.ctx.resume();
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.type = "sawtooth";
+          osc.frequency.setValueAtTime(100, this.ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(
+            10,
+            this.ctx.currentTime + 0.8,
+          );
+          gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(
+            0.01,
+            this.ctx.currentTime + 0.8,
+          );
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.8);
+          const notes = [523.25, 659.25, 783.99, 1046.5, 1318.51, 1567.98];
+          notes.forEach((freq, i) => {
+            setTimeout(() => {
+              const osc2 = this.ctx.createOscillator();
+              const gain2 = this.ctx.createGain();
+              osc2.connect(gain2);
+              gain2.connect(this.ctx.destination);
+              osc2.type = "sine";
+              osc2.frequency.value = freq;
+              gain2.gain.setValueAtTime(0.05, this.ctx.currentTime);
+              gain2.gain.exponentialRampToValueAtTime(
+                0.001,
+                this.ctx.currentTime + 0.5,
+              );
+              osc2.start();
+              osc2.stop(this.ctx.currentTime + 0.5);
+            }, i * 80);
+          });
+        },
+      });
+
+      // ----------------------------------------------------------
+      // 1. 掴んで投げる (タイマースタート機能を追加)
+      // ----------------------------------------------------------
+      AFRAME.registerComponent("click-throw", {
+        init: function () {
+          this.isHeld = false;
+          this.camera = document.querySelector("[camera]");
+          this.initialPos = this.el.getAttribute("position").clone();
+
+          this.el.sceneEl.addEventListener("tick", () => {
+            if (this.el.object3D.position.y < -5) {
+              if (this.el.classList.contains("rain-choco")) {
+                if (this.el.parentNode) this.el.parentNode.removeChild(this.el);
+              } else {
+                this.el.body.position.set(
+                  this.initialPos.x,
+                  this.initialPos.y,
+                  this.initialPos.z,
+                );
+                this.el.body.velocity.set(0, 0, 0);
+                this.el.body.angularVelocity.set(0, 0, 0);
+              }
+            }
+          });
+
+          this.el.addEventListener("mousedown", () => {
+            if (this.isHeld) return;
+
+            // ▼▼▼ ここでタイマースタート信号を送る ▼▼▼
+            this.el.sceneEl.emit("timer-start");
+            // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+            this.isHeld = true;
+            this.el.removeAttribute("dynamic-body");
+            this.camera.object3D.add(this.el.object3D);
+            this.el.object3D.position.set(0.3, -0.3, -0.5);
+            this.el.object3D.rotation.set(0, 0, 0);
+          });
+          window.addEventListener("mouseup", () => {
+            if (!this.isHeld) return;
+            this.el.sceneEl.emit("sound-throw");
+            const worldPos = new THREE.Vector3();
+            this.el.object3D.getWorldPosition(worldPos);
+            const worldQuat = new THREE.Quaternion();
+            this.el.object3D.getWorldQuaternion(worldQuat);
+            this.camera.object3D.remove(this.el.object3D);
+            this.el.sceneEl.object3D.add(this.el.object3D);
+            this.el.object3D.position.copy(worldPos);
+            this.el.object3D.quaternion.copy(worldQuat);
+            this.el.setAttribute("dynamic-body", "mass: 1; shape: sphere");
+            this.isHeld = false;
+            setTimeout(() => {
+              if (!this.el.body) return;
+              const direction = new THREE.Vector3(0, 0, -1);
+              direction.applyQuaternion(this.camera.object3D.quaternion);
+              const power = 20;
+              this.el.body.velocity.set(
+                direction.x * power,
+                direction.y * power + 3,
+                direction.z * power,
+              );
+            }, 10);
+          });
+        },
+      });
+
+      // ----------------------------------------------------------
+      // 2. チョコ管理マネージャー (変更なし)
+      // ----------------------------------------------------------
+      AFRAME.registerComponent("ammo-manager", {
+        init: function () {
+          this.spawnIndex = 0;
+          this.spawns = [
+            {
+              pos: "9 1.5 0",
+              src: "#choco-tex2",
+              normal: "#choco-tex2-NRM",
+              color: "#FFFFFF",
+            },
+            {
+              pos: "0 1.5 -9",
+              src: "#choco-tex3",
+              normal: "#choco-tex3-NRM",
+              color: "#FFFFFF",
+            },
+            {
+              pos: "-9 1.5 0",
+              src: "#choco-tex4",
+              normal: "#choco-tex4-NRM",
+              color: "#FFFFFF",
+            },
+            {
+              pos: "0 1.5 9",
+              src: "#choco-tex1",
+              normal: "#choco-tex1-NRM",
+              color: "#FFFFFF",
+            },
+          ];
+          this.spawnNext();
+          this.el.sceneEl.addEventListener("hit-box", () => {
+            setTimeout(() => {
+              this.spawnNext();
+            }, 500);
+          });
+        },
+        spawnNext: function () {
+          if (this.spawnIndex >= this.spawns.length) return;
+          const data = this.spawns[this.spawnIndex];
+          const sphere = document.createElement("a-sphere");
+          sphere.setAttribute("src", data.src);
+          sphere.setAttribute("normal-map", data.normal);
+          sphere.setAttribute("color", data.color);
+          sphere.setAttribute("radius", "0.25");
+          sphere.setAttribute("position", data.pos);
+          sphere.setAttribute("dynamic-body", "mass: 1; shape: sphere");
+          sphere.setAttribute("click-throw", "");
+          sphere.setAttribute("shadow", "");
+          sphere.setAttribute("animation", {
+            property: "scale",
+            from: "0 0 0",
+            to: "1 1 1",
+            dur: 500,
+            easing: "easeOutElastic",
+          });
+          this.el.sceneEl.appendChild(sphere);
+          this.spawnIndex++;
+        },
+      });
+
+      // ----------------------------------------------------------
+      // 3. 当たると壊れる箱 (タイマーストップ機能を追加)
+      // ----------------------------------------------------------
+      AFRAME.registerComponent("breakable-gift", {
+        schema: { health: { type: "int", default: 4 } },
+        init: function () {
+          this.currentHealth = this.data.health;
+          this.lastHitTime = 0;
+          this.maxOpacity = 0.9;
+          this.sky = document.querySelector("a-sky");
+          this.ground = document.querySelector("#ground-plane");
+
+          this.el.addEventListener("collide", (e) => {
+            const collider = e.detail.body.el;
+            if (!collider.hasAttribute("click-throw")) return;
+
+            const now = Date.now();
+            if (now - this.lastHitTime < 500) return;
+            this.lastHitTime = now;
+
+            this.currentHealth--;
+
+            if (this.currentHealth > 0) {
+              this.el.sceneEl.emit("sound-hit");
+              this.el.sceneEl.emit("hit-box");
+            }
+
+            const newOpacity =
+              (this.currentHealth / this.data.health) * this.maxOpacity;
+            this.el.setAttribute("material", "opacity", newOpacity);
+
+            const children = this.el.querySelectorAll("a-box");
+            children.forEach((child) => child.setAttribute("color", "#FFFFFF"));
+            this.el.setAttribute("color", "#FFFFFF");
+
+            setTimeout(() => {
+              if (this.el) {
+                this.el.setAttribute("color", "#FF4444");
+                children.forEach((child) =>
+                  child.setAttribute("color", "#FFD700"),
+                );
+              }
+            }, 100);
+
+            // 破壊時
+            if (this.currentHealth <= 0) {
+              // ▼▼▼ ここでタイマーストップ信号を送る ▼▼▼
+              this.el.sceneEl.emit("timer-stop");
+              // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+              this.el.emit("open-gift");
+              this.el.sceneEl.emit("sound-explode");
+              this.rainChocolate();
+
+              if (this.sky) {
+                this.sky.setAttribute("src", "#sky");
+                this.sky.removeAttribute("color");
+              }
+              if (this.ground) {
+                this.ground.setAttribute("src", "#ground");
+                this.ground.setAttribute("normal-map", "#ground-NRM");
+                this.ground.removeAttribute("color");
+              }
+
+              setTimeout(() => {
+                if (collider.parentNode)
+                  collider.parentNode.removeChild(collider);
+              }, 0);
+              setTimeout(() => {
+                if (this.el && this.el.parentNode) {
+                  this.el.parentNode.removeChild(this.el);
+                }
+              }, 300);
+            } else {
+              setTimeout(() => {
+                if (collider.parentNode)
+                  collider.parentNode.removeChild(collider);
+              }, 0);
+            }
+          });
+        },
+
+        rainChocolate: function () {
+          const texIDs = [
+            "#choco-tex1",
+            "#choco-tex2",
+            "#choco-tex3",
+            "#choco-tex4",
+          ];
+          const targets = [
+            { x: 9, z: 0 },
+            { x: 0, z: -9 },
+            { x: -9, z: 0 },
+            { x: 0, z: 9 },
+          ];
+          targets.forEach((target) => {
+            for (let i = 0; i < 10; i++) {
+              const sphere = document.createElement("a-sphere");
+              const chosenID =
+                texIDs[Math.floor(Math.random() * texIDs.length)];
+              const offsetX = (Math.random() - 0.5) * 4;
+              const offsetZ = (Math.random() - 0.5) * 4;
+              const x = target.x + offsetX;
+              const y = 10 + Math.random() * 5;
+              const z = target.z + offsetZ;
+              sphere.setAttribute("src", chosenID);
+              sphere.setAttribute("normal-map", chosenID + "-NRM");
+              sphere.setAttribute("radius", 0.15 + Math.random() * 0.15);
+              sphere.setAttribute("position", `${x} ${y} ${z}`);
+              sphere.setAttribute(
+                "dynamic-body",
+                "mass: 0.5; shape: sphere; restitution: 0.8",
+              );
+              sphere.setAttribute("click-throw", "");
+              sphere.setAttribute("class", "rain-choco");
+              sphere.setAttribute("shadow", "");
+              this.el.sceneEl.appendChild(sphere);
+            }
+          });
+        },
+      });
+
+      // ----------------------------------------------------------
+      // 4. バリア (変更なし)
+      // ----------------------------------------------------------
+      AFRAME.registerComponent("box-barrier", {
+        schema: { size: { type: "vec2", default: { x: 1, y: 1 } } },
+        init: function () {
+          this.player = document.querySelector("#rig");
+          this.playerRadius = 0.5;
+        },
+        tick: function () {
+          if (!this.player) return;
+          const pos = this.el.object3D.position;
+          const playerPos = this.player.object3D.position;
+          const halfW = this.data.size.x / 2 + this.playerRadius;
+          const halfD = this.data.size.y / 2 + this.playerRadius;
+          const dx = playerPos.x - pos.x;
+          const dz = playerPos.z - pos.z;
+          if (Math.abs(dx) < halfW && Math.abs(dz) < halfD) {
+            const pushX = halfW - Math.abs(dx);
+            const pushZ = halfD - Math.abs(dz);
+            if (pushX < pushZ) {
+              if (dx > 0) playerPos.x = pos.x + halfW;
+              else playerPos.x = pos.x - halfW;
+            } else {
+              if (dz > 0) playerPos.z = pos.z + halfD;
+              else playerPos.z = pos.z - halfD;
+            }
+          }
+        },
+      });
+    </script>
+  </head>
+
+  <body>
+    <div id="timer-ui">
+      <p id="timer-text">TIME: 00.00</p>
+    </div>
+
+    <a-scene physics="gravity: -9.8; restitution: 0.7" sound-manager game-timer>
+      <a-assets>
+        <img id="sky" src="./assets/a-sky.jpg" />
+        <img id="ground" src="./assets/ground.jpg" />
+        <img id="ground-NRM" src="./assets/ground-NRM.png" />
+        <img id="wall" src="./assets/wall.jpg" />
+        <img id="wall-NRM" src="./assets/wall-NRM.png" />
+        <img id="roof" src="./assets/roof.jpg" />
+        <img id="roof-NRM" src="./assets/roof-NRM.png" />
+        <img id="door" src="./assets/door.png" />
+        <img id="door-NRM" src="./assets/door-NRM.png" />
+        <img id="target-box" src="./assets/target-box.jpg" />
+        <img id="target-box-NRM" src="./assets/target-box-NRM.png" />
+        <img id="choco-tex1" src="./assets/choco-tex1.png" />
+        <img id="choco-tex1-NRM" src="./assets/choco-tex1-NRM.png" />
+        <img id="choco-tex2" src="./assets/choco-tex2.png" />
+        <img id="choco-tex2-NRM" src="./assets/choco-tex2-NRM.png" />
+        <img id="choco-tex3" src="./assets/choco-tex3.png" />
+        <img id="choco-tex3-NRM" src="./assets/choco-tex3-NRM.png" />
+        <img id="choco-tex4" src="./assets/choco-tex4.png" />
+        <img id="choco-tex4-NRM" src="./assets/choco-tex4-NRM.png" />
+      </a-assets>
+
+      <a-sky color="#EEEEEE"></a-sky>
+      <a-plane
+        id="ground-plane"
+        color="#DDDDDD"
+        width="30"
+        height="30"
+        rotation="-90 0 0"
+        static-body
+        nav-mesh
+      ></a-plane>
+
+      <a-box
+        src="#target-box"
+        id="target-box"
+        color="#FF4444"
+        width="13"
+        height="12"
+        depth="12"
+        position="0 6 0"
+        material="repeat: 1 1; normalTextureRepeat: 1 1; opacity: 0.9; transparent: true"
+        static-body
+        breakable-gift="health: 4"
+        box-barrier="size: 13 12"
+        animation__open="property: scale; to: 1.2 1.2 1.2; dur: 200; startEvents: open-gift; easing: easeOutQuad"
+      >
+        <a-box
+          color="#FFD700"
+          width="1.5"
+          height="10.1"
+          depth="10.1"
+          position="0 0 0"
+        ></a-box>
+        <a-box
+          color="#FFD700"
+          width="10.1"
+          height="1.5"
+          depth="10.1"
+          position="0 0 0"
+        ></a-box>
+      </a-box>
+
+      <a-box
+        id="wall"
+        src="#wall"
+        normal-map="#wall-NRM"
+        width="8.1"
+        height="6.6"
+        depth="8.1"
+        position="0 3.4 0"
+        material="repeat: 3 3; side: double; normalTextureRepeat: 3 3"
+        static-body
+        box-barrier="size: 8.1 8.1"
+      ></a-box>
+
+      <a-plane
+        width="1"
+        height="1"
+        material="transparent: true; normalMap: #door-NRM; src: #door"
+        position="0 2 4.1"
+        geometry="height: 5; width: 5"
+      ></a-plane>
+      <a-box
+        src="#roof"
+        normal-map="#roof-NRM"
+        width="8.1"
+        height="6.6"
+        depth="8.1"
+        rotation="40 -90 0"
+        position="-2.1 7 0"
+        geometry="depth: 8; height: 3; width: 11"
+      ></a-box>
+      <a-box
+        src="#roof"
+        normal-map="#roof-NRM"
+        width="8.1"
+        height="6.6"
+        depth="8.1"
+        rotation="40 90 0"
+        position="2.1 7 0"
+        geometry="depth: 8; height: 3; width: 10"
+      ></a-box>
+
+      <a-entity ammo-manager></a-entity>
+
+      <a-entity
+        id="rig"
+        movement-controls="constrainToNavMesh: true"
+        position="0 0 12"
+      >
+        <a-entity
+          camera
+          position="0 1.5 0"
+          look-controls="enabled: true"
+          cursor="rayOrigin: mouse"
+          raycaster="objects: [click-throw]"
+        ></a-entity>
+      </a-entity>
+
+      <a-light type="ambient" color="#FFF" intensity="0.5"></a-light>
+      <a-light type="directional" position="-1 2 1" intensity="1"></a-light>
+    </a-scene>
+  </body>
+</html>
