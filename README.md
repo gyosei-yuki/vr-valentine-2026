@@ -21,7 +21,7 @@
 
 ※ スマホでもPCでも遊べます！
 
-👉 **[🎥 デモプレイ動画を見る (ニコニコ動画) ](https://www.nicovideo.jp/watch/sm45902453)**
+👉 **[🎥 デモプレイ動画を見る (ニコニコ動画)](https://www.nicovideo.jp/watch/sm45902453)**
 
 ## 概要 (Overview)
 * タイムアタック🕐
